@@ -14,7 +14,6 @@ app.use(
   })
 );
 
-
 async function LoadModels() {
   // Load the models
   // __dirname gives the root directory of the server
@@ -23,7 +22,6 @@ async function LoadModels() {
   await faceapi.nets.ssdMobilenetv1.loadFromDisk(__dirname + "/models");
 }
 LoadModels();
-
 
 const faceSchema = new mongoose.Schema({
   label: {
@@ -39,7 +37,6 @@ const faceSchema = new mongoose.Schema({
 
 const FaceModel = mongoose.model("Face", faceSchema);
 
-
 async function uploadLabeledImages(images, label) {
   try {
     let counter = 0;
@@ -50,7 +47,10 @@ async function uploadLabeledImages(images, label) {
       counter = (i / images.length) * 100;
       console.log(`Progress = ${counter}%`);
       // Read each face and save the face descriptions in the descriptions array
-      const detections = await faceapi.detectSingleFace(img).withFaceLandmarks().withFaceDescriptor();
+      const detections = await faceapi
+        .detectSingleFace(img)
+        .withFaceLandmarks()
+        .withFaceDescriptor();
       descriptions.push(detections.descriptor);
     }
 
@@ -63,7 +63,7 @@ async function uploadLabeledImages(images, label) {
     return true;
   } catch (error) {
     console.log(error);
-    return (error);
+    return error;
   }
 }
 
@@ -73,10 +73,15 @@ async function getDescriptorsFromDB(image) {
   for (i = 0; i < faces.length; i++) {
     // Change the face data descriptors from Objects to Float32Array type
     for (j = 0; j < faces[i].descriptions.length; j++) {
-      faces[i].descriptions[j] = new Float32Array(Object.values(faces[i].descriptions[j]));
+      faces[i].descriptions[j] = new Float32Array(
+        Object.values(faces[i].descriptions[j])
+      );
     }
     // Turn the DB face docs to
-    faces[i] = new faceapi.LabeledFaceDescriptors(faces[i].label, faces[i].descriptions);
+    faces[i] = new faceapi.LabeledFaceDescriptors(
+      faces[i].label,
+      faces[i].descriptions
+    );
   }
 
   // Load face matcher to find the matching face
@@ -90,49 +95,62 @@ async function getDescriptorsFromDB(image) {
   faceapi.matchDimensions(temp, displaySize);
 
   // Find matching faces
-  const detections = await faceapi.detectAllFaces(img).withFaceLandmarks().withFaceDescriptors();
+  const detections = await faceapi
+    .detectAllFaces(img)
+    .withFaceLandmarks()
+    .withFaceDescriptors();
   const resizedDetections = faceapi.resizeResults(detections, displaySize);
-  const results = resizedDetections.map((d) => faceMatcher.findBestMatch(d.descriptor));
+  const results = resizedDetections.map((d) =>
+    faceMatcher.findBestMatch(d.descriptor)
+  );
   return results;
 }
 
+app.post("/post-face", async (req, res) => {
+  const files = Object.values(req.files).map((file) => file.tempFilePath);
+  const label = req.body.label;
 
+  let result = await uploadLabeledImages(files, label);
 
-
-app.post("/post-face",async (req,res)=>{
-    const File1 = req.files.File1.tempFilePath
-    const File2 = req.files.File2.tempFilePath
-    const File3 = req.files.File3.tempFilePath
-    const label = req.body.label
-    let result = await uploadLabeledImages([File1, File2, File3], label);
-    if(result){
-        
-        res.json({message:"Face data stored successfully"})
-    }else{
-        res.json({message:"Something went wrong, please try again."})
-        
-    }
-})
-
-app.post("/check-face", async (req, res) => {
-
-  const File1 = req.files.File1.tempFilePath;
-  let result = await getDescriptorsFromDB(File1);
-  res.json({ result });
-  
+  if (result) {
+    res.json({ message: "Face data stored successfully" });
+  } else {
+    res.json({ message: "Something went wrong, please try again." });
+  }
 });
 
+app.post("/check-face", async (req, res) => {
+  try {
+    const File1 = req.files.file.tempFilePath;
+    let result = await getDescriptorsFromDB(File1);
+    res.json({ result });
+  } catch (e) {
+    console.error("Error:", e);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
 
 // add your mongo key instead of the ***
-mongoose
-  .connect(
-    `mongodb://localhost:27017/face-detection-system`,
-    {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-      useCreateIndex: true,
-    }
-  )
+// mongoose
+//   .connect(`mongodb://localhost:27017/face-detection-system`, {
+//     useNewUrlParser: true,
+//     useUnifiedTopology: true,
+//     useCreateIndex: true,
+//   })
+//   .then(() => {
+//     app.listen(process.env.PORT || 5000);
+//     console.log("DB connected and server us running.");
+//   })
+//   .catch((err) => {
+//     console.log(err);
+//   });
+
+  mongoose
+  .connect(`mongodb://mongodb/face-detection-system`, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+    useCreateIndex: true,
+  })
   .then(() => {
     app.listen(process.env.PORT || 5000);
     console.log("DB connected and server us running.");
